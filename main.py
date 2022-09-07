@@ -8,6 +8,7 @@ from mainFunctions import *
 #my code
 from gradQuantize import generateGrad
 from gradQuantize import quantEval
+from gradQuantize import quantChannel
 
 import pickle
 from tqdm import tqdm
@@ -38,6 +39,9 @@ if __name__ == '__main__':
     parser.add_argument('--grad_epoch'      , default=16, type=int, help='run traing to make weights')
     parser.add_argument('--dump_path'       , default='./data/resnet18_cifar/weights', type=str, help='weight adn gradient dump path')
     
+    # Quant Options
+    parser.add_argument('--qaunt_symmetric' , default=False, type=bool, help='weight symmetric quantization')
+    
     # Grad Quantization
     parser.add_argument('--quant_resolution'  , default=100, type=int,     help='quantization resolution')
     parser.add_argument('--quant_clip_start'  , default=0.0, type=float,   help='quantization clipping start')
@@ -50,10 +54,11 @@ if __name__ == '__main__':
     parser.add_argument('--quant_result_path' , default='./data/resnet18_cifar/result/', type=str,  help='quantization save path')
     
     # Quantization Flow Control
-    parser.add_argument('--run_train'    , default=False, type=bool, help='run traing to make weights')
-    parser.add_argument('--run_grad'     , default=False, type=bool, help='run gradient dump')
-    parser.add_argument('--run_hess'     , default=False, type=bool, help='run hessian  dump')
-    parser.add_argument('--run_32fp_eval', default=False, type=bool, help='run 32bit fp evaluation')
+    parser.add_argument('--run_train'      , default=False, type=bool, help='run traing to make weights')
+    parser.add_argument('--run_grad'       , default=False, type=bool, help='run gradient dump')
+    parser.add_argument('--run_hess'       , default=False, type=bool, help='run hessian  dump')
+    parser.add_argument('--run_32fp_eval'  , default=False, type=bool, help='run 32bit fp evaluation')
+    parser.add_argument('--run_channelWise', default=False, type=bool, help='run grad Matric')
     
     # Server Configuration
     parser.add_argument('--gpu', default='cuda:0', type=str, help='select gpu')
@@ -103,7 +108,21 @@ if __name__ == '__main__':
         eval(eval_net, test_loader, device, train_args.criterion, bestAcc)
         exit(0)
         
-    ### --- Grad Quantization Code
+    ### --- Grad Quantization Using Matrics
+    if args.run_channelWise:
+        print("Starting channel wise quantization")
+        dumpID = getToday()
+        Logs = {'config': {}, 'data':[]}
+        Logs['config']['args'] = args
+        for bit in range(args.quant_bit_start, args.quant_bit_end):
+            print("Quantizing in bit %d" % bit)
+            with torch.no_grad():
+                Logs[f'bit_{bit}'] = quantChannel(device, bit, test_loader, train_args, args)
+        with open('run_channle.pkl', 'wb') as f:
+            pickle.dump(Logs ,f)
+        exit(0)
+        
+    ### --- Grad Quantization Scan All Step Code
     print("Starting Grad Quantization")
     dumpID = getToday()
     quant_resolution = args.quant_resolution

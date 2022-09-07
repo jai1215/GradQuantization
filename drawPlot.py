@@ -27,12 +27,21 @@ def latestDumps(base, path):
 def loadPickle(f):
     ret = None
     with open(f, 'rb') as fin:
-        ret = pickle.load(fin)
-        ret = pd.DataFrame(ret['data'])
-        ret.set_index('clipping')
+        ret = pd.DataFrame(pickle.load(fin)['data'])
     return ret
 
 if __name__ == '__main__':
+    # Temporal Code - begin
+    ret = None
+    with open('run_channle.pkl', 'rb') as fin:
+        ret = pickle.load(fin)
+    for i in range(1, 8):
+        print(ret[f'bit_{i}'])
+    exit(1)
+    # Temporal Code - end
+    
+    
+    
     parser = argparse.ArgumentParser(description='dara Plot Parameters')
     parser.add_argument('--TEST'              , default='resnet18', type=str, help='project name')
     parser.add_argument('--quant_result_path' , default='./data/resnet18_cifar/result/' , type=str,  help='quantization save path')
@@ -42,7 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--dump_png'          , default=True   , type=bool,  help='png dump enable')
     parser.add_argument('--dump_bits'         , default='2', type=str,  help='dumpping bits')
     parser.add_argument('--dump_acc_html'     , default=False, type=bool,  help='dump acc html')
-    parser.add_argument('--minLossArea'       , default=False, type=bool,  help='only print minmize loss area +-0.15')
+    parser.add_argument('--minLossArea'       , default=True , type=bool,  help='only print minmize loss area +-0.15')
     
     args = parser.parse_args()
     
@@ -52,6 +61,8 @@ if __name__ == '__main__':
     ## -- Data Loading
     basePaths = latestDumps('baseData', args.quant_result_path)
     df = loadPickle(args.quant_result_path + basePaths[bit])
+    df = df.set_index('clipping', inplace=True)
+    
     # 충돌범위
     # conflictSet = set(mse_df.columns) & set(loss_df.columns) 
     # loss_df = loss_df.drop(conflictSet, axis=1)
@@ -69,6 +80,9 @@ if __name__ == '__main__':
     acc_df.index  = min_idx.index.tolist()
     acc_df = acc_df.sort_values(ascending=False)
     acc_df = pd.DataFrame(acc_df).join(pd.DataFrame(min_idx))
+    
+    print("Top Accuracy")
+    print(acc_df[:10])
     
     if args.dump_acc_html:
         with open(f'{args.dump_html_path}/acc_{bit}.html', 'wt') as fout:

@@ -3,6 +3,8 @@ import torch
 from torch.autograd import grad
 from utils.utilFuncs import *
 from tqdm import tqdm
+from mainFunctions import getModel
+from train import eval
 
 @logging_time
 def generateGrad(model, train_loader, device, criterion, args, optimizer):
@@ -220,9 +222,10 @@ def weightQuantize(name, param, bits=8, clipping=1.0, symmetric=False, klDivSum=
         maxVal = maxTh
     
     paramAfter = quant(param, bits, minVal, maxVal)
-    if klDivSum['run']:
-        klDivSum['sum'] += klDivParam(paramBefore, paramAfter, bits, maxVal).data.item()
-        klDivSum['count'] += 1
+    if 'run' in klDivSum:
+        if klDivSum['run']:
+            klDivSum['sum'] += klDivParam(paramBefore, paramAfter, bits, maxVal).data.item()
+            klDivSum['count'] += 1
     return paramAfter
 
 def quant(param, bits, minVal, maxVal):
@@ -341,4 +344,58 @@ def roundTensor(paramBefore, clipping):
     maxTh = torch.max(torch.abs(minVal), torch.abs(maxVal))
     ret = (paramBefore <= maxTh) & (paramBefore >= -maxTh)
     return ret.type(torch.uint8)
+
+def quantLayer_with_MSE(device, bit, args, name, param, power=1.0, grad=None, hess=None):
+    paramBefore = param.clone().detach()
+    paramAfter  = param.clone().detach()
+
+    #Quantize resolution
+    clipStart = args.quant_clip_start
+    clipEnd   = args.quant_clip_end
+    quant_resolution = args.quant_resolution
+    clipSize  = clipEnd - clipStart
+    clipStep  = clipSize / quant_resolution
+    
+    #Find Minimum point
+    minClipping = 1.0
+    minMSE = 1e+100
+    for clp in range(1, quant_resolution+1):
+        clipping = clipStart + clipStep*clp
+        paramAfter.data = weightQuantize(name, param, bit, clipping)
+        curMSE = meanSquareError(paramBefore, paramAfter, power=power, weight=grad, hess=hess)
+        if curMSE < minMSE: #update minimum point
+            minClipping = clipping
+            minMSE = curMSE
+    
+    return weightQuantize(name, param, bit, minClipping)
         
+def quantModel_with_MSE(device, bit, args, test_loader, train_args, power=1.0, useGrad=False, useHess=False):
+    quant_net = getModel(args)
+    quant_net.load_state_dict(torch.load(args.load_param_path, map_location=device))
+    quant_net.to(torch.device(device))
+    for name, param in quant_net.named_parameters():
+        if re.search(r'conv.\.weight', name):
+            paramGrad   = None
+            paramHess   = None
+            if useGrad:
+                paramGrad   = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_grad_000.pth', map_location=device)
+            if (name in HessDumped) and args.quant_use_hess: # Load When Hessian Data exists
+                paramHess = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_hess_000.pth', map_location=device)
+            param.data = quantLayer_with_MSE(device, bit, args, name, param, power=power, grad=paramGrad, hess=paramHess)
+    evalLog = dict()
+    eval(quant_net, test_loader, device, train_args.criterion, 0, log = evalLog)
+    return evalLog['acc']
+            
+def quantChannel(device, bit, test_loader, train_args, args):
+    log = dict()
+    log['mseSumP1.0'] = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=1.0, useGrad=False, useHess=False)
+    log['mseSumP2.0'] = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=2.0, useGrad=False, useHess=False)
+    for i in tqdm(range(30)):
+        grad = 0.5 + (i * 0.1)
+        log[f'gradP{grad:2.1f}']   = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=grad, useGrad=True , useHess=False)
+    for i in tqdm(range(5)):
+        grad = 1.0 + (i * 0.2)
+        log[f'hessP{grad:2.1f}']   = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=grad, useGrad=True , useHess=True)
+    return log
+    
+    
