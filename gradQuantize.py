@@ -209,7 +209,7 @@ def quantEval(device, model, bits, clipping, log, args, symmetric=False, useHess
         log['klDiv'] = klDivSum['sum']
     return model
 
-def weightQuantize(name, param, bits=8, clipping=1.0, symmetric=False, klDivSum={}):
+def weightQuantize(name, param, bits=8, clipping=1.0, symmetric=False, klDivSum={}, quantDict={}):
     paramBefore = param.clone().detach()
     param = param.data
     minVal = param.min() * clipping
@@ -220,11 +220,13 @@ def weightQuantize(name, param, bits=8, clipping=1.0, symmetric=False, klDivSum=
         maxTh = torch.max(minValAbs, maxValAbs)
         minVal = -maxTh
         maxVal = maxTh
+    quantDict['min'] = minVal
+    quantDict['max'] = maxVal
     
     paramAfter = quant(param, bits, minVal, maxVal)
     if 'run' in klDivSum:
         if klDivSum['run']:
-            klDivSum['sum'] += klDivParam(paramBefore, paramAfter, bits, maxVal).data.item()
+            klDivSum['sum'] += klDivParam(paramBefore, paramAfter, bits, maxVal)
             klDivSum['count'] += 1
     return paramAfter
 
@@ -254,7 +256,7 @@ def klDivParam(p, q, bits, maxVal):
     histQ = histQ.hist / hTotalSum
     histQ = histQ.unsqueeze(1).repeat(1, 32) / 32
     histQ = histQ.flatten()
-    return klDiv(histP, histQ)
+    return klDiv(histP, histQ).data.item()
 
 def klDiv(p, q):
     assert p.shape == q.shape
@@ -264,7 +266,7 @@ def klDiv(p, q):
     q = q.clamp(min=1e-12)
     return torch.sum(p * torch.log(p / q))
 
-def meanSquareError(p, q, weight=None, power=2, torchAbs=True, roundError=False, hess=None, clipping=1.0, L3Loss=0):
+def meanSquareError(p, q, weight=None, power=2, torchAbs=True, roundError=False, hess=None, clipping=1.0, L3Loss=0, channel_wise=False):
     delta = torch.abs(p - q) if torchAbs else (p - q)
     if weight is not None:
         weight = torch.abs(weight) if torchAbs else weight
@@ -274,7 +276,12 @@ def meanSquareError(p, q, weight=None, power=2, torchAbs=True, roundError=False,
         delta = rTensor * delta # remove delta when clipping out Area
         
     #Flatten
-    n, c, fx, fy = delta.shape
+    n, c, fx, fy = 1, 1, 1, 1
+    if channel_wise:
+        c, fx, fy = delta.shape
+    else:
+        n, c, fx, fy = delta.shape
+        
     delta   = torch.reshape(delta, (n*c*fx*fy, 1))
     delta_n = torch.reshape(delta, (n, c*fx*fy, 1))
     if weight is not None:
@@ -310,8 +317,6 @@ def meanSquareError(p, q, weight=None, power=2, torchAbs=True, roundError=False,
         ret += l3
     # devide with number of parameters
     ret = ret / p.numel()
-    # Not a Number
-    assert(ret==ret, "loss has not a number")
         
     return ret.data.item()
 
@@ -345,7 +350,7 @@ def roundTensor(paramBefore, clipping):
     ret = (paramBefore <= maxTh) & (paramBefore >= -maxTh)
     return ret.type(torch.uint8)
 
-def quantLayer_with_MSE(device, bit, args, name, param, power=1.0, grad=None, hess=None):
+def quantLayer_with_MSE(device, bit, args, name, param, power=1.0, grad=None, hess=None, channel_wise=False):
     paramBefore = param.clone().detach()
     paramAfter  = param.clone().detach()
 
@@ -362,7 +367,7 @@ def quantLayer_with_MSE(device, bit, args, name, param, power=1.0, grad=None, he
     for clp in range(1, quant_resolution+1):
         clipping = clipStart + clipStep*clp
         paramAfter.data = weightQuantize(name, param, bit, clipping)
-        curMSE = meanSquareError(paramBefore, paramAfter, power=power, weight=grad, hess=hess)
+        curMSE = meanSquareError(paramBefore, paramAfter, power=power, weight=grad, hess=hess, channel_wise=channel_wise)
         if curMSE < minMSE: #update minimum point
             minClipping = clipping
             minMSE = curMSE
@@ -381,7 +386,68 @@ def quantModel_with_MSE(device, bit, args, test_loader, train_args, power=1.0, u
                 paramGrad   = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_grad_000.pth', map_location=device)
             if (name in HessDumped) and args.quant_use_hess: # Load When Hessian Data exists
                 paramHess = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_hess_000.pth', map_location=device)
-            param.data = quantLayer_with_MSE(device, bit, args, name, param, power=power, grad=paramGrad, hess=paramHess)
+            
+            if args.run_channelWise:
+                #for each output channel
+                n_channel = param.data.shape[0]
+                for i in tqdm(range(n_channel), desc=name, leave=False):
+                    paramGradSub = paramGrad[i] if paramGrad is not None else None
+                    paramHessSub = paramHess[i] if paramHess is not None else None
+                    param.data[i] = quantLayer_with_MSE(device, bit, args, name, param[i], power=power, grad=paramGradSub, hess=paramHessSub, channel_wise=args.run_channelWise)
+            else:
+                param.data = quantLayer_with_MSE(device, bit, args, name, param, power=power, grad=paramGrad, hess=paramHess, channel_wise=args.run_channelWise)
+                
+    evalLog = dict()
+    eval(quant_net, test_loader, device, train_args.criterion, 0, log = evalLog)
+    return evalLog['acc']
+
+def quantLayer_with_KLDiv(device, bit, args, name, param, power=1.0, grad=None, hess=None):
+    paramBefore = param.clone().detach()
+    paramAfter  = param.clone().detach()
+
+    #Quantize resolution
+    clipStart = args.quant_clip_start
+    clipEnd   = args.quant_clip_end
+    quant_resolution = args.quant_resolution
+    clipSize  = clipEnd - clipStart
+    clipStep  = clipSize / quant_resolution
+    
+    #Find Minimum point
+    minClipping = 1.0
+    minKlDiv = 1e+100
+    for clp in range(1, quant_resolution+1):
+        clipping = clipStart + clipStep*clp
+        quantDict = dict()
+        paramAfter.data = weightQuantize(name, param, bit, clipping, quantDict=quantDict)
+        curKlDiv = klDivParam(paramBefore, paramAfter, bit, quantDict['max'])
+        if curKlDiv < minKlDiv: #update minimum point
+            minClipping = clipping
+            minKlDiv = curKlDiv
+    return weightQuantize(name, param, bit, minClipping)
+
+def quantModel_with_KLDiv(device, bit, args, test_loader, train_args):
+    quant_net = getModel(args)
+    quant_net.load_state_dict(torch.load(args.load_param_path, map_location=device))
+    quant_net.to(torch.device(device))
+    for name, param in quant_net.named_parameters():
+        if re.search(r'conv.\.weight', name):
+            if args.run_channelWise:
+                n_channel = param.data.shape[0]
+                for i in tqdm(range(n_channel), desc=name, leave=False):
+                    param.data[i] = quantLayer_with_KLDiv(device, bit, args, name, param[i])
+            else:
+                param.data = quantLayer_with_KLDiv(device, bit, args, name, param)
+    evalLog = dict()
+    eval(quant_net, test_loader, device, train_args.criterion, 0, log = evalLog)
+    return evalLog['acc']
+    
+def quantModel_with_minMax(device, bit, args, test_loader, train_args):
+    quant_net = getModel(args)
+    quant_net.load_state_dict(torch.load(args.load_param_path, map_location=device))
+    quant_net.to(torch.device(device))
+    for name, param in quant_net.named_parameters():
+        if re.search(r'conv.\.weight', name):
+            param.data = weightQuantize(name, param, bit, 1.0)
     evalLog = dict()
     eval(quant_net, test_loader, device, train_args.criterion, 0, log = evalLog)
     return evalLog['acc']
@@ -390,12 +456,13 @@ def quantChannel(device, bit, test_loader, train_args, args):
     log = dict()
     log['mseSumP1.0'] = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=1.0, useGrad=False, useHess=False)
     log['mseSumP2.0'] = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=2.0, useGrad=False, useHess=False)
-    for i in tqdm(range(30)):
-        grad = 0.5 + (i * 0.1)
+    for i in tqdm(range(12), desc='grad level'):
+        grad = 1.0 + (i * 0.5)
         log[f'gradP{grad:2.1f}']   = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=grad, useGrad=True , useHess=False)
-    for i in tqdm(range(5)):
-        grad = 1.0 + (i * 0.2)
-        log[f'hessP{grad:2.1f}']   = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=grad, useGrad=True , useHess=True)
+    log['klDiv']  = quantModel_with_KLDiv (device, bit, args, test_loader, train_args)
+    log['minMax'] = quantModel_with_minMax(device, bit, args, test_loader, train_args)
+    # for i in tqdm(range(5)):
+    #     grad = 1.0 + (i * 0.2)
+    #     log[f'hessP{grad:2.1f}']   = quantModel_with_MSE(device, bit, args, test_loader, train_args, power=grad, useGrad=True , useHess=True)
     return log
-    
     

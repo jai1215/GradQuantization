@@ -18,7 +18,7 @@ drawLabels = [
 # 'roundP1.5',
 # 'roundP2.0',
 # 'klDiv',
-'hessP1.0',
+# 'hessP1.0',
 # 'hessP1.5',
 # 'hessP2.0',
 # 'L3Loss2.0',

@@ -32,13 +32,26 @@ def loadPickle(f):
 
 if __name__ == '__main__':
     # Temporal Code - begin
-    ret = None
-    with open('run_channle.pkl', 'rb') as fin:
-        ret = pickle.load(fin)
-    for i in range(1, 8):
-        print(ret[f'bit_{i}'])
-    exit(1)
-    # Temporal Code - end
+    TEST = False
+    if TEST:
+        ret = None
+        with open('run_channel.pkl', 'rb') as fin:
+            ret = pickle.load(fin)
+            
+        lines = []
+        for i in range(1, 8):
+            df_sub = pd.DataFrame([ret[f'bit_{i}']])
+            df_sub['bit'] = f'bit_{i}'
+            lines.append(df_sub)
+        df = pd.concat(lines)
+        df.set_index('bit', inplace=True)
+        
+        print(df)
+        with open(f'result.html', 'wt') as fout:
+            fout.write(df.to_html())
+            
+        exit(1)
+    #Temporal Code - end
     
     
     
@@ -49,7 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--dump_png_path'     , default='./data/resnet18_cifar/png/'    , type=str,  help='png dump path')
     parser.add_argument('--dump_html'         , default=True  , type=bool,  help='html dump enable')
     parser.add_argument('--dump_png'          , default=True   , type=bool,  help='png dump enable')
-    parser.add_argument('--dump_bits'         , default='2', type=str,  help='dumpping bits')
+    parser.add_argument('--dump_bits'         , default='7', type=str,  help='dumpping bits')
     parser.add_argument('--dump_acc_html'     , default=False, type=bool,  help='dump acc html')
     parser.add_argument('--minLossArea'       , default=True , type=bool,  help='only print minmize loss area +-0.15')
     
@@ -61,7 +74,7 @@ if __name__ == '__main__':
     ## -- Data Loading
     basePaths = latestDumps('baseData', args.quant_result_path)
     df = loadPickle(args.quant_result_path + basePaths[bit])
-    df = df.set_index('clipping', inplace=True)
+    df.set_index('clipping', inplace=True)
     
     # 충돌범위
     # conflictSet = set(mse_df.columns) & set(loss_df.columns) 
@@ -85,7 +98,9 @@ if __name__ == '__main__':
     print(acc_df[:10])
     
     if args.dump_acc_html:
-        with open(f'{args.dump_html_path}/acc_{bit}.html', 'wt') as fout:
+        dump_path = f'{args.dump_html_path}/acc_{bit}.html'
+        with open(dump_path, 'wt') as fout:
+            print(f"Dump : accuracy Data in {dump_path}")
             fout.write(acc_df.to_html())
     
     ## -- minimize Loss
@@ -111,7 +126,9 @@ if __name__ == '__main__':
     plt.title(f"{bit} bits quantization loss")
     
     if args.dump_png:
-        plt.savefig(f'{args.dump_png_path}/dumpPLT_{bit}.png')
+        dump_path = f'{args.dump_png_path}/dumpPLT_{bit}.png'
+        print(f"Dump : plot is stored in {dump_path}")
+        plt.savefig(dump_path)
     
     plt.show()
     

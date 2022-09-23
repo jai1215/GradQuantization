@@ -58,7 +58,8 @@ if __name__ == '__main__':
     parser.add_argument('--run_grad'       , default=False, type=bool, help='run gradient dump')
     parser.add_argument('--run_hess'       , default=False, type=bool, help='run hessian  dump')
     parser.add_argument('--run_32fp_eval'  , default=False, type=bool, help='run 32bit fp evaluation')
-    parser.add_argument('--run_channelWise', default=False, type=bool, help='run grad Matric')
+    parser.add_argument('--run_layerWise'  , default=True , type=bool, help='run grad Matric')
+    parser.add_argument('--run_channelWise', default=True , type=bool, help='run channel wise grad Matric')
     
     # Server Configuration
     parser.add_argument('--gpu', default='cuda:0', type=str, help='select gpu')
@@ -109,8 +110,8 @@ if __name__ == '__main__':
         exit(0)
         
     ### --- Grad Quantization Using Matrics
-    if args.run_channelWise:
-        print("Starting channel wise quantization")
+    if args.run_layerWise:
+        print("Starting Layer-wise quantization")
         dumpID = getToday()
         Logs = {'config': {}, 'data':[]}
         Logs['config']['args'] = args
@@ -118,7 +119,8 @@ if __name__ == '__main__':
             print("Quantizing in bit %d" % bit)
             with torch.no_grad():
                 Logs[f'bit_{bit}'] = quantChannel(device, bit, test_loader, train_args, args)
-        with open('run_channle.pkl', 'wb') as f:
+        with open('run_channel.pkl', 'wb') as f:
+            print(f"Dump : result is dumping in run_channel.pkl")
             pickle.dump(Logs ,f)
         exit(0)
         
@@ -153,4 +155,5 @@ if __name__ == '__main__':
         dumpPath += ('./baseData_' if args.quant_base_data else '/test_')
         dumpPath += f'{bits}_{dumpID}.pkl'
         with open(dumpPath, 'wb') as f:
+            print(f"Dump : result is dumping in {dumpPath}")
             pickle.dump(Logs ,f)
