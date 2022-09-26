@@ -32,7 +32,7 @@ def loadPickle(f):
 
 if __name__ == '__main__':
     # Temporal Code - begin
-    TEST = False
+    TEST = True
     if TEST:
         ret = None
         with open('run_channel.pkl', 'rb') as fin:

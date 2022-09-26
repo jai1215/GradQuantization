@@ -120,6 +120,7 @@ if __name__ == '__main__':
             print("Quantizing in bit %d" % bit)
             with torch.no_grad():
                 Logs[f'bit_{bit}'] = quantChannel(device, bit, test_loader, train_args, args)
+            print(Logs[f'bit_{bit}'])
             
         with open('run_channel.pkl', 'wb') as f:
             print(f"Dump : result is dumping in run_channel.pkl")

@@ -4,3 +4,4 @@ data/
 checkPoints/
 temp_codes/
 utils/__pycache__/
+*.pt
