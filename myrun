@@ -1,0 +1,2 @@
+# python main.py --TEST resnet34 --run_grad True --arch='resnet34'
+python main.py --TEST resnet34 --arch='resnet34' --quant_resolution 20 --quant_run_eval True --run_layerWise True

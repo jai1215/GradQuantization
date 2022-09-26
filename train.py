@@ -111,12 +111,12 @@ def eval(model, test_loader, device, criterion, bestAcc, log=None, writer=None):
     # if writer:
     #     writer.add_scalar("log/test error", 100-acc, global_step)
     
-    log['acc'] = acc
-    log['loss'] = total_loss
-    
-    ##- Test Result
-    elapsedTime = '{:0.4f} ms'.format((et - st) * 1000)
-    if not loss:
+    if log is not None:
+        log['acc'] = acc
+        log['loss'] = total_loss
+    else:
+        ##- Test Result
+        elapsedTime = '{:0.4f} ms'.format((et - st) * 1000)
         print(f'[Test ] Accuracy : Loss({total_loss:.3f}): {100 * correct / total:.3f} % - {elapsedTime}')
     return bestAcc
 

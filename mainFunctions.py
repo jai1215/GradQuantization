@@ -4,7 +4,8 @@ import torch.nn as nn
 
 import random, os, time
 import numpy as np
-from resnet import ResNet18
+# from resnet import ResNet18, ResNet34, ResNet50
+from models.resnet import resnet18, resnet34, resnet50
 from types import SimpleNamespace
 import torch.optim as optim
 from torch.optim import lr_scheduler
@@ -28,8 +29,17 @@ def seed_all(seed=2022):
     torch.backends.cudnn.deterministic = True
 
 def getModel(args):
-    assert(args.arch == 'resnet18', "Not Implemented archtecture %s" % args.arch)
-    return ResNet18(mnist=False).to(torch.device(args.gpu))
+    assert(args.arch in ['resnet18', 'resnet34', 'resnet50'], "Not Implemented archtecture %s" % args.arch)
+    if args.arch == 'resnet18':
+        # return ResNet18(mnist=False).to(torch.device(args.gpu))
+        return resnet18(pretrained=args.load_param, wpath=args.load_param_path, device=args.gpu).to(torch.device(args.gpu))
+    elif args.arch == 'resnet34':
+        return resnet34(pretrained=args.load_param, wpath=args.load_param_path, device=args.gpu).to(torch.device(args.gpu))
+    elif args.arch == 'resnet50':
+        return resnet50(pretrained=args.load_param, wpath=args.load_param_path, device=args.gpu).to(torch.device(args.gpu))
+    
+    return None
+
 
 def getTrainArgs(args, model):
     ret = SimpleNamespace()

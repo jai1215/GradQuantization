@@ -5,11 +5,16 @@ from utils.utilFuncs import *
 from tqdm import tqdm
 from mainFunctions import getModel
 from train import eval
+import os
 
 @logging_time
 def generateGrad(model, train_loader, device, criterion, args, optimizer):
     model.train()
     
+    ## -- Make dump path
+    if not os.path.isdir(args.dump_path):
+        os.makedirs(args.dump_path)
+        print(f"Making dump path : {args.dump_path}")
     ## -- Save Weights
     for name, param in model.named_parameters():
         if not re.search(r'conv.\.weight', name):
@@ -138,15 +143,14 @@ HessDumped = [
 
 def quantEval(device, model, bits, clipping, log, args, symmetric=False, useHess=True):
     klDivSum = {'run': True, 'sum': 0, 'count': 0}
-    weightPath = f'./data/resnet18_cifar/weights/'
     
     for name, param in model.named_parameters():
         if re.search(r'conv.\.weight', name):
             paramBefore = param.clone().detach()
-            paramGrad   = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_grad_000.pth', map_location=device)
+            paramGrad   = torch.load(f'{args.dump_path}/{args.TEST}_{name}_grad_000.pth', map_location=device)
             paramHess   = None
             if (name in HessDumped) and useHess: # Load When Hessian Data exists
-                paramHess = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_hess_000.pth', map_location=device)
+                paramHess = torch.load(f'{args.dump_path}/{args.TEST}_{name}_hess_000.pth', map_location=device)
             
             ## -- Running Quantization
             param.data = weightQuantize(name, param, bits, clipping, symmetric, klDivSum)
@@ -171,7 +175,7 @@ def quantEval(device, model, bits, clipping, log, args, symmetric=False, useHess
             lossGradP15 = log['gradP1.5']
             lossGradP20 = log['gradP2.0']
             for nSample in range(1, 16):
-                paramGradSub = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_grad_{nSample:03d}.pth', map_location=device)
+                paramGradSub = torch.load(f'{args.dump_path}/{args.TEST}_{name}_grad_{nSample:03d}.pth', map_location=device)
                 lossGradP10Sub = meanSquareError(paramBefore, param, power=1.0, weight=paramGradSub)
                 lossGradP15Sub = meanSquareError(paramBefore, param, power=1.5, weight=paramGradSub)
                 lossGradP20Sub = meanSquareError(paramBefore, param, power=2.0, weight=paramGradSub)
@@ -383,9 +387,9 @@ def quantModel_with_MSE(device, bit, args, test_loader, train_args, power=1.0, u
             paramGrad   = None
             paramHess   = None
             if useGrad:
-                paramGrad   = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_grad_000.pth', map_location=device)
+                paramGrad   = torch.load(f'{args.dump_path}/{args.TEST}_{name}_grad_000.pth', map_location=device)
             if (name in HessDumped) and args.quant_use_hess: # Load When Hessian Data exists
-                paramHess = torch.load(f'./data/resnet18_cifar/weights/{args.TEST}_{name}_hess_000.pth', map_location=device)
+                paramHess = torch.load(f'{args.dump_path}/{args.TEST}_{name}_hess_000.pth', map_location=device)
             
             if args.run_channelWise:
                 #for each output channel

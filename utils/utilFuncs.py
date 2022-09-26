@@ -53,3 +53,21 @@ def logging_time(original_fn):
         print("Funtion Running[{}]: {} sec".format(original_fn.__name__, end_time-start_time))
         return result
     return wrapper_fn
+
+def update_args(args):
+    '''change name of path paramters to architecture'''
+    defaultArch = 'resnet18'
+    changeArch = args.arch
+    
+    if changeArch == defaultArch:
+        return
+        
+    if re.search(defaultArch, args.load_param_path):
+        args.load_param_path = re.sub(defaultArch, changeArch, args.load_param_path)
+        print(f"ARGS changes : load_parm_path has been changed to {args.load_param_path}")
+    if re.search(defaultArch, args.dump_path):
+        args.dump_path = re.sub(defaultArch, changeArch, args.dump_path)
+        print(f"ARGS changes : dump_path has been changed to {args.dump_path}")
+    if re.search(defaultArch, args.quant_result_path):
+        args.quant_result_path = re.sub(defaultArch, changeArch, args.quant_result_path)
+        print(f"ARGS changes : quant_result_path has been changed to {args.quant_result_path}")

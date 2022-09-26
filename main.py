@@ -21,19 +21,21 @@ if __name__ == '__main__':
     # Project Setting
     parser.add_argument('--TEST', default='resnet18', type=str, help='project name')
     
-    parser.add_argument('--seed', default=2022, type=int, help='random seed for result reproducing')
+    # parser.add_argument('--seed', default=2022, type=int, help='random seed for result reproducing')
+    parser.add_argument('--seed', default=10, type=int, help='random seed for result reproducing')
     parser.add_argument('--arch', default='resnet18', type=str, help='dataset name',
-                    choices=['resnet18', 'resnet50'])
+                    choices=['resnet18', 'resnet34', 'resnet50'])
     parser.add_argument('--batch_size', default=64, type=int, help='mini-batch size for data loader')
     parser.add_argument('--workers', default=4, type=int, help='number of workers for data loader')
     parser.add_argument('--data_path', default='../data', type=str, help='path to CIFAR10Net data', required=False)
+    parser.add_argument('--data_download', default=False, type=bool, help='download CIFAR10Net data')
     
     # Training Parameters
     parser.add_argument('--max_epoch', default=1, type=int, help='trainning epoch')
     
     # Data Loading
     parser.add_argument('--load_param'      , default=True, type=bool, help='Load pre trained parameter')
-    parser.add_argument('--load_param_path' , default='./data/model/resnet18_weight_test.pth', type=str, help='pretrained weight')
+    parser.add_argument('--load_param_path' , default='./models/pretrained/resnet18.pt', type=str, help='pretrained weight')
     
     # Make Grad Data
     parser.add_argument('--grad_epoch'      , default=16, type=int, help='run traing to make weights')
@@ -58,13 +60,14 @@ if __name__ == '__main__':
     parser.add_argument('--run_grad'       , default=False, type=bool, help='run gradient dump')
     parser.add_argument('--run_hess'       , default=False, type=bool, help='run hessian  dump')
     parser.add_argument('--run_32fp_eval'  , default=False, type=bool, help='run 32bit fp evaluation')
-    parser.add_argument('--run_layerWise'  , default=True , type=bool, help='run grad Matric')
+    parser.add_argument('--run_layerWise'  , default=False, type=bool, help='run grad Matric for each layer optimal')
     parser.add_argument('--run_channelWise', default=True , type=bool, help='run channel wise grad Matric')
     
     # Server Configuration
     parser.add_argument('--gpu', default='cuda:0', type=str, help='select gpu')
     
     args = parser.parse_args()
+    update_args(args) #update name if arch changed
     seed_all(args.seed)
     
     ## -- Select Device / Data / Model
@@ -73,13 +76,10 @@ if __name__ == '__main__':
     model = getModel(args)
 
     ## -- Loading Model Parameter
-    if args.load_param:
-        print("Loading model from: ", args.load_param_path)
-        if device == 'cpu':
-            model.load_state_dict(torch.load(args.load_param_path, map_location=device))
-        else:
-            model.load_state_dict(torch.load(args.load_param_path, map_location=device))
-    model.to(device)
+    # if args.load_param:
+    #     print("Loading model from: ", args.load_param_path)
+    #     model.load_state_dict(torch.load(args.load_param_path, map_location=device))
+    # model.to(device)
     
     train_args = getTrainArgs(args, model)
 
@@ -102,14 +102,15 @@ if __name__ == '__main__':
         exit(0)
 
     ## -- 32b float Evaluation
-    if run_eval:
+    if args.run_32fp_eval:
         print("Main : Running Evaluation")
         eval_net = getModel(args)
         eval_net.load_state_dict(torch.load(args.load_param_path))
-        eval(eval_net, test_loader, device, train_args.criterion, bestAcc)
+        acc = eval(eval_net, test_loader, device, train_args.criterion, 0)
+        print(f"test name={args.TEST} accuracy=%3.1f" %(acc))
         exit(0)
         
-    ### --- Grad Quantization Using Matrics
+    ### --- Grad Quantization Using Matrics(My Code)
     if args.run_layerWise:
         print("Starting Layer-wise quantization")
         dumpID = getToday()
@@ -119,6 +120,7 @@ if __name__ == '__main__':
             print("Quantizing in bit %d" % bit)
             with torch.no_grad():
                 Logs[f'bit_{bit}'] = quantChannel(device, bit, test_loader, train_args, args)
+            
         with open('run_channel.pkl', 'wb') as f:
             print(f"Dump : result is dumping in run_channel.pkl")
             pickle.dump(Logs ,f)
@@ -153,7 +155,7 @@ if __name__ == '__main__':
 
         dumpPath = args.quant_result_path
         dumpPath += ('./baseData_' if args.quant_base_data else '/test_')
-        dumpPath += f'{bits}_{dumpID}.pkl'
+        dumpPath += f'{args.TEST}_{bits}_{dumpID}.pkl'
         with open(dumpPath, 'wb') as f:
             print(f"Dump : result is dumping in {dumpPath}")
             pickle.dump(Logs ,f)
