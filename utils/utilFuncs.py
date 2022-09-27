@@ -71,3 +71,6 @@ def update_args(args):
     if re.search(defaultArch, args.quant_result_path):
         args.quant_result_path = re.sub(defaultArch, changeArch, args.quant_result_path)
         print(f"ARGS changes : quant_result_path has been changed to {args.quant_result_path}")
+    if re.search(defaultArch, args.quant_layer_dump):
+        args.quant_layer_dump = re.sub(defaultArch, changeArch, args.quant_layer_dump)
+        print(f"ARGS changes : quant_layer_dump has been changed to {args.quant_layer_dump}")

@@ -24,7 +24,7 @@ if __name__ == '__main__':
     # parser.add_argument('--seed', default=2022, type=int, help='random seed for result reproducing')
     parser.add_argument('--seed', default=10, type=int, help='random seed for result reproducing')
     parser.add_argument('--arch', default='resnet18', type=str, help='dataset name',
-                    choices=['resnet18', 'resnet34', 'resnet50'])
+                    choices=['resnet18', 'resnet34', 'resnet50', 'vgg11_bn', 'vgg13_bn', 'vgg16_bn', 'vgg19_bn', 'mobilenet_v2'])
     parser.add_argument('--batch_size', default=64, type=int, help='mini-batch size for data loader')
     parser.add_argument('--workers', default=4, type=int, help='number of workers for data loader')
     parser.add_argument('--data_path', default='../data', type=str, help='path to CIFAR10Net data', required=False)
@@ -54,6 +54,7 @@ if __name__ == '__main__':
     parser.add_argument('--quant_use_hess'    , default=False, type=bool,  help='quantization use hessian')
     parser.add_argument('--quant_base_data'   , default=False, type=bool,  help='quantization save result as base data')
     parser.add_argument('--quant_result_path' , default='./data/resnet18_cifar/result/', type=str,  help='quantization save path')
+    parser.add_argument('--quant_layer_dump'  , default='./results/quant_layer_resnet18.pkl', type=str,  help='layer quantization result')
     
     # Quantization Flow Control
     parser.add_argument('--run_train'      , default=False, type=bool, help='run traing to make weights')
@@ -74,12 +75,6 @@ if __name__ == '__main__':
     device = torch.device(args.gpu if torch.cuda.is_available() else 'cpu') if args.gpu[:4] == 'cuda' else 'cpu'
     train_loader, test_loader = getDataLoader(args)
     model = getModel(args)
-
-    ## -- Loading Model Parameter
-    # if args.load_param:
-    #     print("Loading model from: ", args.load_param_path)
-    #     model.load_state_dict(torch.load(args.load_param_path, map_location=device))
-    # model.to(device)
     
     train_args = getTrainArgs(args, model)
 
@@ -116,14 +111,14 @@ if __name__ == '__main__':
         dumpID = getToday()
         Logs = {'config': {}, 'data':[]}
         Logs['config']['args'] = args
-        for bit in range(args.quant_bit_start, args.quant_bit_end):
+        for bit in range(args.quant_bit_start, args.quant_bit_end+1):
             print("Quantizing in bit %d" % bit)
             with torch.no_grad():
                 Logs[f'bit_{bit}'] = quantChannel(device, bit, test_loader, train_args, args)
             print(Logs[f'bit_{bit}'])
             
-        with open('run_channel.pkl', 'wb') as f:
-            print(f"Dump : result is dumping in run_channel.pkl")
+        with open(args.quant_layer_dump, 'wb') as f:
+            print(f"Dump : result is dumping in {args.quant_layer_dump}")
             pickle.dump(Logs ,f)
         exit(0)
         
@@ -131,7 +126,7 @@ if __name__ == '__main__':
     print("Starting Grad Quantization")
     dumpID = getToday()
     quant_resolution = args.quant_resolution
-    for bits in range(args.quant_bit_start, args.quant_bit_end):
+    for bits in range(args.quant_bit_start, args.quant_bit_end+1):
         print("Quantizing in bits %d" % bits)
         Logs = {'config': {}, 'data':[]}
         Logs['config']['bits'] = bits

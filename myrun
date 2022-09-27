@@ -1,5 +1,23 @@
-# python main.py --TEST resnet34 --run_grad True --arch='resnet34'
-# python main.py --TEST resnet34 --arch='resnet34' --quant_resolution 20 --quant_run_eval True --run_layerWise True
+python main.py --TEST resnet18 --arch='resnet18' --run_grad True
+python main.py --TEST resnet18 --arch='resnet18' --quant_resolution 40 --quant_run_eval True --run_layerWise True
 
-python main.py --TEST resnet50 --run_grad True --arch='resnet50'
+python main.py --TEST resnet34 --arch='resnet34' --run_grad True
+python main.py --TEST resnet34 --arch='resnet34' --quant_resolution 40 --quant_run_eval True --run_layerWise True
+
+python main.py --TEST resnet50 --arch='resnet50' --run_grad True
 python main.py --TEST resnet50 --arch='resnet50' --quant_resolution 40 --quant_run_eval True --run_layerWise True
+
+python main.py --TEST vgg11_bn --arch='vgg11_bn' --run_grad True
+python main.py --TEST vgg11_bn --arch='vgg11_bn' --quant_resolution 40 --quant_run_eval True --run_layerWise True
+
+python main.py --TEST vgg13_bn --arch='vgg13_bn' --run_grad True
+python main.py --TEST vgg13_bn --arch='vgg13_bn' --quant_resolution 40 --quant_run_eval True --run_layerWise True
+
+python main.py --TEST vgg16_bn --arch='vgg16_bn' --run_grad True
+python main.py --TEST vgg16_bn --arch='vgg16_bn' --quant_resolution 40 --quant_run_eval True --run_layerWise True
+
+python main.py --TEST vgg19_bn --arch='vgg19_bn' --run_grad True
+python main.py --TEST vgg19_bn --arch='vgg19_bn' --quant_resolution 40 --quant_run_eval True --run_layerWise True
+
+python main.py --TEST mobilenet_v2 --arch='mobilenet_v2' --run_grad True
+python main.py --TEST mobilenet_v2 --arch='mobilenet_v2' --quant_resolution 40 --quant_run_eval True --run_layerWise True

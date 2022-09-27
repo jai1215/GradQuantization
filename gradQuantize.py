@@ -10,6 +10,7 @@ import os
 @logging_time
 def generateGrad(model, train_loader, device, criterion, args, optimizer):
     model.train()
+    # print(model)
     
     ## -- Make dump path
     if not os.path.isdir(args.dump_path):
@@ -17,10 +18,11 @@ def generateGrad(model, train_loader, device, criterion, args, optimizer):
         print(f"Making dump path : {args.dump_path}")
     ## -- Save Weights
     for name, param in model.named_parameters():
-        if not re.search(r'conv.\.weight', name):
+        # if not re.search(r'conv.\.weight', name):
+        if param.dim() != 4: # only convolution
             continue
         torch.save(param, f'{args.dump_path}/{args.TEST}_{name}_weight.pth')
-    
+
     for i, data in enumerate(train_loader):
         ## -- Remove Gradient from model
         optimizer.zero_grad()
@@ -33,7 +35,8 @@ def generateGrad(model, train_loader, device, criterion, args, optimizer):
         
         grads = {}
         for name, param in model.named_parameters():
-            if not re.search(r'conv.\.weight', name):
+            # if not re.search(r'conv.\.weight', name):
+            if param.dim() != 4: # only convolution
                 continue
             
             ## -- Running Grad
@@ -69,7 +72,8 @@ def generateHess(grads, name, weight, idx, args):
 def testKLQuant(model, bits=8, clipping=1.0, symmetric=False):
     idx = 0
     for name, param in model.named_parameters():
-        if re.search(r'conv.\.weight', name):
+        # if re.search(r'conv.\.weight', name):
+        if param.dim() == 4: # only convolution
             param.data = weightKLQuant(name, param, bits)
         idx += 1
     return model
@@ -145,7 +149,8 @@ def quantEval(device, model, bits, clipping, log, args, symmetric=False, useHess
     klDivSum = {'run': True, 'sum': 0, 'count': 0}
     
     for name, param in model.named_parameters():
-        if re.search(r'conv.\.weight', name):
+        # if re.search(r'conv.\.weight', name):
+        if param.dim() == 4: # only convolution
             paramBefore = param.clone().detach()
             paramGrad   = torch.load(f'{args.dump_path}/{args.TEST}_{name}_grad_000.pth', map_location=device)
             paramHess   = None
@@ -383,7 +388,8 @@ def quantModel_with_MSE(device, bit, args, test_loader, train_args, power=1.0, u
     quant_net.load_state_dict(torch.load(args.load_param_path, map_location=device))
     quant_net.to(torch.device(device))
     for name, param in quant_net.named_parameters():
-        if re.search(r'conv.\.weight', name):
+        # if not re.search(r'conv.\.weight', name):
+        if param.dim() == 4: # only convolution
             paramGrad   = None
             paramHess   = None
             if useGrad:
@@ -434,7 +440,8 @@ def quantModel_with_KLDiv(device, bit, args, test_loader, train_args):
     quant_net.load_state_dict(torch.load(args.load_param_path, map_location=device))
     quant_net.to(torch.device(device))
     for name, param in quant_net.named_parameters():
-        if re.search(r'conv.\.weight', name):
+        # if not re.search(r'conv.\.weight', name):
+        if param.dim() == 4: # only convolution
             if args.run_channelWise:
                 n_channel = param.data.shape[0]
                 for i in tqdm(range(n_channel), desc=name, leave=False):
@@ -450,7 +457,8 @@ def quantModel_with_minMax(device, bit, args, test_loader, train_args):
     quant_net.load_state_dict(torch.load(args.load_param_path, map_location=device))
     quant_net.to(torch.device(device))
     for name, param in quant_net.named_parameters():
-        if re.search(r'conv.\.weight', name):
+        # if not re.search(r'conv.\.weight', name):
+        if param.dim() == 4: # only convolution
             param.data = weightQuantize(name, param, bit, 1.0)
     evalLog = dict()
     eval(quant_net, test_loader, device, train_args.criterion, 0, log = evalLog)
