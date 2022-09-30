@@ -7,6 +7,19 @@ from mainFunctions import getModel
 from train import eval
 import os
 
+def hutchpp(A, d, m):
+    """https://arxiv.org/abs/2010.09649
+
+    A is the LinearOperator whose trace to estimate
+    d is the input dimension
+    m is the number of queries (larger m yields better estimates)
+    """
+    S = torch.randn(d, m // 3)
+    G = torch.randn(d, m // 3)
+    Q, _ = torch.qr(A.matvec(S))
+    proj = G - Q @ (Q.T @ G)
+    return torch.trace(Q.T @ A.matvec(Q)) + (3./m)*torch.trace(proj.T @ A.matvec(proj))
+
 @logging_time
 def generateGrad(model, train_loader, device, criterion, args, optimizer):
     model.train()
@@ -42,7 +55,11 @@ def generateGrad(model, train_loader, device, criterion, args, optimizer):
             ## -- Running Grad
             grads[name] = grad(loss, param, create_graph=args.run_hess, retain_graph=True)[0]
             torch.save(grads[name], f'{args.dump_path}/{args.TEST}_{name}_grad_{i:03d}.pth')
-            
+
+            ## -- Running Hessian
+            if args.run_hutch_pp:
+                generateHess(grads, name, param, i, args)
+                
             ## -- Running Hessian
             if args.run_hess:
                 generateHess(grads, name, param, i, args)

@@ -1,7 +1,6 @@
 import time
 import torch
 import re
-import time
 
 def printStatus(model, optimizer):
     # 모델의 state_dict 출력

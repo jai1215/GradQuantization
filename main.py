@@ -40,6 +40,9 @@ if __name__ == '__main__':
     # Make Grad Data
     parser.add_argument('--grad_epoch'      , default=16, type=int, help='run traing to make weights')
     parser.add_argument('--dump_path'       , default='./data/resnet18_cifar/weights', type=str, help='weight adn gradient dump path')
+    parser.add_argument('--run_grad'        , default=False, type=bool, help='run gradient dump')
+    parser.add_argument('--run_hess'        , default=False, type=bool, help='run hessian  dump')
+    parser.add_argument('--run_hutch_pp'    , default=False, type=bool, help='run hutch++ and generate trace of hessian')
     
     # Quant Options
     parser.add_argument('--qaunt_symmetric' , default=False, type=bool, help='weight symmetric quantization')
@@ -58,8 +61,6 @@ if __name__ == '__main__':
     
     # Quantization Flow Control
     parser.add_argument('--run_train'      , default=False, type=bool, help='run traing to make weights')
-    parser.add_argument('--run_grad'       , default=False, type=bool, help='run gradient dump')
-    parser.add_argument('--run_hess'       , default=False, type=bool, help='run hessian  dump')
     parser.add_argument('--run_32fp_eval'  , default=False, type=bool, help='run 32bit fp evaluation')
     parser.add_argument('--run_layerWise'  , default=False, type=bool, help='run grad Matric for each layer optimal')
     parser.add_argument('--run_channelWise', default=True , type=bool, help='run channel wise grad Matric')
