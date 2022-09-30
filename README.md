@@ -8,7 +8,8 @@ This project has two python program that runs quantization.
 
 
 ## Getting Started
-**click `Use this template` and use this template!**
+**you have to train your data or you need pre-trained weights**
+ex) https://github.com/huyvnphan/PyTorch_CIFAR10
 
 ### module version required
 
